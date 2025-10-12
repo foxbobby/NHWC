@@ -48,10 +48,10 @@ export const BRUSH_CONFIG = {
   DEFAULT_SIZE: 4,
   MIN_SIZE: 1,
   MAX_SIZE: 20,
-  DEFAULT_COLOR: '#1E293B',
+  DEFAULT_COLOR: '#000000',
   DEFAULT_OPACITY: 1,
   COLORS: [
-    '#1E293B', // 黑色
+    '#000000', // 黑色
     '#EF4444', // 红色
     '#10B981', // 绿色
     '#2563EB', // 蓝色

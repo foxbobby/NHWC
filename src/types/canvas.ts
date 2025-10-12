@@ -34,7 +34,7 @@ export interface BrushSettings {
 }
 
 export interface CanvasAction {
-  type: 'DRAW' | 'UNDO' | 'REDO' | 'CLEAR' | 'SET_BRUSH';
+  type: 'DRAW' | 'UNDO' | 'REDO' | 'CLEAR' | 'SET_BRUSH' | 'START_DRAWING' | 'FINISH_DRAWING';
   payload?: unknown;
   timestamp: number;
 }
@@ -49,7 +49,7 @@ export interface TouchEvent {
 export interface CanvasState {
   strokes: DrawingStroke[];
   undoStack: DrawingStroke[][];
-  redoStack: DrawingStroke[][];
+  redoStack: DrawingStroke[];
   isDrawing: boolean;
   currentStroke?: DrawingStroke;
   brushSettings: BrushSettings;

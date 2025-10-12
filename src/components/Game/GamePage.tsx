@@ -102,6 +102,9 @@ export default function GamePage() {
                       onDrawingChange={handleDrawingChange}
                       disabled={gameState.gameStatus === 'guessing' || gameState.gameStatus === 'finished'}
                       className="w-full"
+                      canvasState={canvasState}
+                      canvasActions={canvasActions}
+                      canvasUtils={canvasUtils}
                     />
                     
                     {/* 紧凑工具栏 */}
@@ -222,6 +225,9 @@ export default function GamePage() {
                 <Canvas
                   onDrawingChange={handleDrawingChange}
                   disabled={gameState.gameStatus === 'guessing' || gameState.gameStatus === 'finished'}
+                  canvasState={canvasState}
+                  canvasActions={canvasActions}
+                  canvasUtils={canvasUtils}
                 />
               </div>
             </CanvasErrorBoundary>

@@ -10,11 +10,9 @@ import { GAME_CONFIG, SUCCESS_MESSAGES, ERROR_MESSAGES } from '@/lib/constants';
 
 // 游戏动作类型
 type GameAction = 
-  | { type: 'START_GAME'; payload: { totalRounds?: number; prompt?: string } }
-  | { type: 'START_ROUND'; payload: { prompt?: string } }
+  | { type: 'START_GAME'; payload: { targetWord?: string } }
   | { type: 'SUBMIT_DRAWING'; payload: { canvasData: CanvasData } }
-  | { type: 'RECEIVE_RESULTS'; payload: { results: GuessResult[]; timeSpent: number } }
-  | { type: 'NEXT_ROUND' }
+  | { type: 'RECEIVE_RESULTS'; payload: { results: GuessResult[]; timeSpent: number; userAnswer?: string } }
   | { type: 'END_GAME' }
   | { type: 'RESET_GAME' }
   | { type: 'UPDATE_TIME'; payload: { timeRemaining: number } }
@@ -41,19 +39,12 @@ function gameReducer(state: GameHookState, action: GameAction): GameHookState {
   switch (action.type) {
     case 'START_GAME':
       const newSession = GameLogic.createGameSession();
-      const newGameState = GameLogic.createInitialGameState(action.payload.totalRounds);
-      const startedGameState = GameLogic.startNewRound(newGameState, action.payload.prompt);
+      const newGameState = GameLogic.createInitialGameState();
+      const startedGameState = GameLogic.startGame(newGameState, action.payload.targetWord);
       return {
         ...state,
         session: newSession,
         gameState: startedGameState,
-        error: null
-      };
-
-    case 'START_ROUND':
-      return {
-        ...state,
-        gameState: GameLogic.startNewRound(state.gameState, action.payload.prompt),
         error: null
       };
 
@@ -69,59 +60,31 @@ function gameReducer(state: GameHookState, action: GameAction): GameHookState {
       const updatedGameState = GameLogic.processGuessResults(
         state.gameState,
         action.payload.results,
-        action.payload.timeSpent
+        action.payload.timeSpent,
+        action.payload.userAnswer
       );
-      
-      // 创建回合记录
-      const round = GameLogic.createGameRound(
-        state.gameState.currentRound,
-        state.gameState.currentPrompt || '',
-        state.gameState.currentPrompt ? { 
-          imageData: '', 
-          width: 0, 
-          height: 0, 
-          strokes: [], 
-          timestamp: new Date() 
-        } : { imageData: '', width: 0, height: 0, strokes: [], timestamp: new Date() },
-        action.payload.results,
-        action.payload.timeSpent
-      );
-
-      const updatedSession = state.session ? {
-        ...state.session,
-        rounds: [...state.session.rounds, round],
-        totalScore: updatedGameState.score
-      } : null;
 
       return {
         ...state,
         gameState: updatedGameState,
-        session: updatedSession,
         isLoading: false,
         error: null
       };
 
-    case 'NEXT_ROUND':
-      return {
-        ...state,
-        gameState: GameLogic.nextRound(state.gameState),
-        error: null
-      };
-
     case 'END_GAME':
-      const completedSession = state.session ? 
-        GameLogic.completeGameSession(state.session, state.gameState) : null;
-      
       return {
         ...state,
-        session: completedSession,
+        gameState: { ...state.gameState, gameStatus: 'finished' },
         error: null
       };
 
     case 'RESET_GAME':
       return {
-        ...initialState,
-        gameState: GameLogic.createInitialGameState()
+        ...state,
+        gameState: GameLogic.resetGame(),
+        session: null,
+        isLoading: false,
+        error: null
       };
 
     case 'UPDATE_TIME':
@@ -152,19 +115,10 @@ export function useGame() {
   const startTimeRef = useRef<number>(0);
 
   // 开始游戏
-  const startGame = useCallback((totalRounds?: number, prompt?: string) => {
+  const startGame = useCallback((targetWord?: string) => {
     dispatch({ 
       type: 'START_GAME', 
-      payload: { totalRounds, prompt } 
-    });
-    startTimeRef.current = Date.now();
-  }, []);
-
-  // 开始新回合
-  const startRound = useCallback((prompt?: string) => {
-    dispatch({ 
-      type: 'START_ROUND', 
-      payload: { prompt } 
+      payload: { targetWord } 
     });
     startTimeRef.current = Date.now();
   }, []);
@@ -220,15 +174,6 @@ export function useGame() {
     }
   }, [state.gameState.currentPrompt, success, showError]);
 
-  // 下一回合
-  const nextRound = useCallback(() => {
-    if (GameLogic.isGameFinished(state.gameState)) {
-      dispatch({ type: 'END_GAME' });
-      success(SUCCESS_MESSAGES.GAME_COMPLETED);
-    } else {
-      dispatch({ type: 'NEXT_ROUND' });
-    }
-  }, [state.gameState, success]);
 
   // 重置游戏
   const resetGame = useCallback(() => {
@@ -278,10 +223,7 @@ export function useGame() {
 
   // 游戏统计
   const gameStats = {
-    progress: GameLogic.getGameProgress(state.gameState),
     isFinished: GameLogic.isGameFinished(state.gameState),
-    currentRound: state.gameState.currentRound,
-    totalRounds: state.gameState.totalRounds,
     score: state.gameState.score,
     timeRemaining: state.gameState.timeRemaining,
     formattedTime: GameLogic.formatGameTime(state.gameState.timeRemaining)
@@ -292,6 +234,7 @@ export function useGame() {
     ? GameLogic.generateGameSummary(state.session)
     : null;
 
+
   return {
     // 状态
     gameState: state.gameState,
@@ -301,9 +244,7 @@ export function useGame() {
     
     // 动作
     startGame,
-    startRound,
     submitDrawing,
-    nextRound,
     resetGame,
     
     // 统计

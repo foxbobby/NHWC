@@ -140,6 +140,9 @@ export class UserExperienceEnhancer {
    * 设置网络状态监听
    */
   private setupNetworkListeners(): void {
+    // 检查是否在浏览器环境中
+    if (typeof window === 'undefined') return;
+    
     window.addEventListener('online', () => {
       this.isOnline = true;
       this.processOfflineQueue();
@@ -156,6 +159,9 @@ export class UserExperienceEnhancer {
    * 加载用户偏好
    */
   private loadPreferences(): void {
+    // 检查是否在浏览器环境中
+    if (typeof window === 'undefined') return;
+    
     try {
       const saved = localStorage.getItem('foxai_ux_preferences');
       if (saved) {
@@ -171,6 +177,8 @@ export class UserExperienceEnhancer {
    */
   savePreferences(newPreferences: Partial<typeof this.preferences>): void {
     this.preferences = { ...this.preferences, ...newPreferences };
+    if (typeof window === 'undefined') return;
+    
     try {
       localStorage.setItem('foxai_ux_preferences', JSON.stringify(this.preferences));
     } catch (error) {
@@ -209,22 +217,26 @@ export class UserExperienceEnhancer {
 
     // 基于笔画数量的提示
     if (strokeCount < 3 && timeElapsed > 10000) {
-      applicableHints.push(this.getHintByType('technique', 'basic_shapes'));
+      const hint = this.getHintByType('technique', 'basic_shapes');
+      if (hint) applicableHints.push(hint);
     }
 
     // 基于时间的提示
     if (timeElapsed > 30000 && strokeCount > 10) {
-      applicableHints.push(this.getHintByType('detail', 'add_details'));
+      const hint = this.getHintByType('detail', 'add_details');
+      if (hint) applicableHints.push(hint);
     }
 
     // 基于绘画质量的提示
     if (drawingDensity < 0.1 && strokeCount > 5) {
-      applicableHints.push(this.getHintByType('composition', 'size_matters'));
+      const hint = this.getHintByType('composition', 'size_matters');
+      if (hint) applicableHints.push(hint);
     }
 
     // 鼓励性提示
     if (gameContext && gameContext.previousAttempts > 2) {
-      applicableHints.push(this.getHintByType('encouragement', 'keep_going'));
+      const hint = this.getHintByType('encouragement', 'keep_going');
+      if (hint) applicableHints.push(hint);
     }
 
     // 根据用户偏好过滤提示频率
@@ -340,12 +352,14 @@ export class UserExperienceEnhancer {
     this.progressSaves.set(saveId, progressSave);
 
     // 保存到本地存储
-    try {
-      const saves = Array.from(this.progressSaves.values());
-      localStorage.setItem('foxai_progress_saves', JSON.stringify(saves));
-      console.log(`游戏进度已保存: ${saveId}`);
-    } catch (error) {
-      console.error('保存进度失败:', error);
+    if (typeof window !== 'undefined') {
+      try {
+        const saves = Array.from(this.progressSaves.values());
+        localStorage.setItem('foxai_progress_saves', JSON.stringify(saves));
+        console.log(`游戏进度已保存: ${saveId}`);
+      } catch (error) {
+        console.error('保存进度失败:', error);
+      }
     }
 
     return saveId;
@@ -355,6 +369,8 @@ export class UserExperienceEnhancer {
    * 加载游戏进度
    */
   loadProgress(saveId?: string): ProgressSave | ProgressSave[] | null {
+    if (typeof window === 'undefined') return null;
+    
     try {
       const saved = localStorage.getItem('foxai_progress_saves');
       if (!saved) return null;
@@ -385,6 +401,8 @@ export class UserExperienceEnhancer {
    * 删除保存的进度
    */
   deleteProgress(saveId: string): boolean {
+    if (typeof window === 'undefined') return false;
+    
     try {
       this.progressSaves.delete(saveId);
       const saves = Array.from(this.progressSaves.values());
@@ -427,10 +445,12 @@ export class UserExperienceEnhancer {
     this.offlineQueue.push(queueItem);
     
     // 保存到本地存储
-    try {
-      localStorage.setItem('foxai_offline_queue', JSON.stringify(this.offlineQueue));
-    } catch (error) {
-      console.error('保存离线队列失败:', error);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('foxai_offline_queue', JSON.stringify(this.offlineQueue));
+      } catch (error) {
+        console.error('保存离线队列失败:', error);
+      }
     }
 
     return itemId;
@@ -465,10 +485,12 @@ export class UserExperienceEnhancer {
     }
 
     // 更新本地存储
-    try {
-      localStorage.setItem('foxai_offline_queue', JSON.stringify(this.offlineQueue));
-    } catch (error) {
-      console.error('更新离线队列失败:', error);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('foxai_offline_queue', JSON.stringify(this.offlineQueue));
+      } catch (error) {
+        console.error('更新离线队列失败:', error);
+      }
     }
   }
 
@@ -527,13 +549,7 @@ export class UserExperienceEnhancer {
   /**
    * 获取用户体验统计
    */
-  getUXStats(): {
-    hintsShown: number;
-    progressSaves: number;
-    offlineQueueSize: number;
-    isOnline: boolean;
-    preferences: typeof this.preferences;
-  } {
+  getUXStats() {
     return {
       hintsShown: this.hintTimers.size,
       progressSaves: this.progressSaves.size,

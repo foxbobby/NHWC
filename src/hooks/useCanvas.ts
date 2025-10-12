@@ -37,17 +37,17 @@ function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         strokes: state.strokes.slice(0, -1),
-        undoStack: [...state.undoStack, [lastStroke]]
+        redoStack: [...state.redoStack, lastStroke]
       };
     
     case 'REDO':
-      if (state.undoStack.length === 0) return state;
+      if (state.redoStack.length === 0) return state;
       
-      const strokesToRedo = state.undoStack[state.undoStack.length - 1];
+      const strokeToRedo = state.redoStack[state.redoStack.length - 1];
       return {
         ...state,
-        strokes: [...state.strokes, ...strokesToRedo],
-        undoStack: state.undoStack.slice(0, -1)
+        strokes: [...state.strokes, strokeToRedo],
+        redoStack: state.redoStack.slice(0, -1)
       };
     
     case 'CLEAR':
@@ -62,6 +62,18 @@ function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         brushSettings: { ...state.brushSettings, ...(action.payload as Partial<BrushSettings>) }
+      };
+    
+    case 'START_DRAWING':
+      return {
+        ...state,
+        isDrawing: true
+      };
+    
+    case 'FINISH_DRAWING':
+      return {
+        ...state,
+        isDrawing: false
       };
     
     default:
@@ -96,17 +108,22 @@ export function useCanvas() {
       timestamp: Date.now()
     };
 
-    // 设置绘制样式（只在开始时设置一次）
+    // 更新状态
+    dispatch({ type: 'START_DRAWING', timestamp: Date.now() });
+
+    // 设置绘制样式（每次都重新设置以确保颜色正确）
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = state.brushSettings.size;
     ctx.strokeStyle = state.brushSettings.color;
     ctx.globalAlpha = state.brushSettings.opacity;
     
+    console.log('开始绘制，使用颜色:', state.brushSettings.color);
+    
     // 开始新路径
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
-  }, [state.brushSettings, getContext]);
+  }, [state.brushSettings.color, state.brushSettings.size, state.brushSettings.opacity, getContext]);
 
   // 继续绘制
   const continueDrawing = useCallback((point: Point) => {
@@ -135,6 +152,9 @@ export function useCanvas() {
       payload: currentStrokeRef.current,
       timestamp: Date.now()
     });
+    
+    // 更新绘制状态
+    dispatch({ type: 'FINISH_DRAWING', timestamp: Date.now() });
     
     currentStrokeRef.current = null;
   }, []);
@@ -264,6 +284,6 @@ export function useCanvas() {
       exportImage
     },
     canUndo: state.strokes.length > 0,
-    canRedo: state.undoStack.length > 0
+    canRedo: state.redoStack.length > 0
   };
 }

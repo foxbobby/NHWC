@@ -3,14 +3,14 @@ import { CanvasData } from './canvas';
 export type GameStatus = 'waiting' | 'drawing' | 'guessing' | 'finished';
 
 export interface GameState {
-  currentRound: number;
   score: number;
   timeRemaining: number;
   gameStatus: GameStatus;
   currentPrompt?: string;
   guessResults: GuessResult[];
-  totalRounds: number;
   startTime?: Date;
+  targetWord?: string; // 用户想要画的目标词汇
+  userAnswer?: string; // 用户输入的答案（用于验证AI的准确性）
 }
 
 export interface GuessResult {
@@ -36,9 +36,13 @@ export interface GameSession {
   playerId: string;
   startTime: Date;
   endTime?: Date;
-  rounds: GameRound[];
-  totalScore: number;
+  drawing?: CanvasData;
+  targetWord?: string;
+  userAnswer?: string;
+  aiGuesses: GuessResult[];
+  finalScore: number;
   status: GameStatus;
+  aiAccuracy: number; // AI猜测的准确性评分
 }
 
 export interface PlayerStats {

@@ -106,8 +106,6 @@ export default function EnhancedHomePage({ onStartGame }: EnhancedHomePageProps)
           </p>
         </div>
 
-        {/* 游戏统计 */}
-        <GameStats screenInfo={screenInfo} />
       </div>
     </WelcomeLayout>
   );
@@ -159,95 +157,3 @@ function FeatureCard({ icon, title, description, screenInfo, className }: Featur
   );
 }
 
-// 游戏统计组件
-function GameStats({ screenInfo }: { screenInfo: any }) {
-  const [stats, setStats] = useState({
-    totalGames: 0,
-    totalPlayers: 0,
-    accuracy: 0
-  });
-
-  useEffect(() => {
-    // 模拟加载统计数据
-    const timer = setTimeout(() => {
-      setStats({
-        totalGames: 12580,
-        totalPlayers: 3420,
-        accuracy: 87
-      });
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div className={cn(
-      'bg-white/50 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 max-w-2xl mx-auto',
-      screenInfo.isMobile && 'mx-4'
-    )}>
-      <h3 className={cn(
-        'font-bold text-gray-800 mb-4 text-center',
-        screenInfo.isMobile ? 'text-lg' : 'text-xl'
-      )}>
-        🏆 游戏统计
-      </h3>
-      
-      <div className={cn(
-        'grid gap-4',
-        screenInfo.isMobile ? 'grid-cols-1' : 'grid-cols-3'
-      )}>
-        <StatItem
-          label="总游戏数"
-          value={stats.totalGames.toLocaleString()}
-          icon="🎮"
-          screenInfo={screenInfo}
-        />
-        <StatItem
-          label="玩家数量"
-          value={stats.totalPlayers.toLocaleString()}
-          icon="👥"
-          screenInfo={screenInfo}
-        />
-        <StatItem
-          label="AI准确率"
-          value={`${stats.accuracy}%`}
-          icon="🎯"
-          screenInfo={screenInfo}
-        />
-      </div>
-    </div>
-  );
-}
-
-// 统计项组件
-function StatItem({ label, value, icon, screenInfo }: {
-  label: string;
-  value: string;
-  icon: string;
-  screenInfo: any;
-}) {
-  return (
-    <div className="text-center space-y-2">
-      <div className={cn(
-        'text-2xl',
-        screenInfo.isIPad && 'text-3xl'
-      )}>
-        {icon}
-      </div>
-      <div className={cn(
-        'font-bold text-blue-600',
-        screenInfo.isMobile ? 'text-lg' :
-        screenInfo.isIPad ? 'text-xl' :
-        'text-xl'
-      )}>
-        {value}
-      </div>
-      <div className={cn(
-        'text-gray-600',
-        screenInfo.isMobile ? 'text-sm' : 'text-base'
-      )}>
-        {label}
-      </div>
-    </div>
-  );
-}

@@ -1,6 +1,5 @@
 import { 
   GameState, 
-  GameRound, 
   GameSession, 
   GuessResult, 
   PlayerStats,
@@ -19,38 +18,36 @@ export class GameLogic {
       id: generateId(),
       playerId,
       startTime: new Date(),
-      rounds: [],
-      totalScore: 0,
-      status: 'waiting'
+      aiGuesses: [],
+      finalScore: 0,
+      status: 'waiting',
+      aiAccuracy: 0
     };
   }
 
   /**
    * 创建新游戏状态
    */
-  static createInitialGameState(totalRounds: number = GAME_CONFIG.DEFAULT_ROUNDS): GameState {
+  static createInitialGameState(): GameState {
     return {
-      currentRound: 1,
       score: 0,
       timeRemaining: GAME_CONFIG.ROUND_TIME_LIMIT,
       gameStatus: 'waiting',
       guessResults: [],
-      totalRounds,
       startTime: new Date()
     };
   }
 
   /**
-   * 开始新回合
+   * 开始游戏（设置目标词汇）
    */
-  static startNewRound(gameState: GameState, prompt?: string): GameState {
+  static startGame(gameState: GameState, targetWord?: string): GameState {
     return {
       ...gameState,
       gameStatus: 'drawing',
       timeRemaining: GAME_CONFIG.ROUND_TIME_LIMIT,
-      currentPrompt: prompt,
-      guessResults: [],
-      startTime: new Date()
+      targetWord,
+      guessResults: []
     };
   }
 
@@ -70,89 +67,78 @@ export class GameLogic {
   static processGuessResults(
     gameState: GameState, 
     results: GuessResult[],
-    timeSpent: number
+    timeSpent: number,
+    userAnswer?: string
   ): GameState {
-    const correctGuess = results.find(result => result.isCorrect);
-    const roundScore = this.calculateRoundScore(correctGuess, timeSpent, results);
+    // 计算AI的准确性
+    const aiAccuracy = this.calculateAIAccuracy(results, gameState.targetWord, userAnswer);
+    const finalScore = this.calculateFinalScore(results, timeSpent, aiAccuracy);
 
-    const newGameState: GameState = {
+    return {
       ...gameState,
       guessResults: results,
-      score: gameState.score + roundScore,
-      gameStatus: gameState.currentRound >= gameState.totalRounds ? 'finished' : 'waiting'
-    };
-
-    return newGameState;
-  }
-
-  /**
-   * 进入下一回合
-   */
-  static nextRound(gameState: GameState): GameState {
-    if (gameState.currentRound >= gameState.totalRounds) {
-      return {
-        ...gameState,
-        gameStatus: 'finished'
-      };
-    }
-
-    return {
-      ...gameState,
-      currentRound: gameState.currentRound + 1,
-      gameStatus: 'waiting',
-      timeRemaining: GAME_CONFIG.ROUND_TIME_LIMIT,
-      currentPrompt: undefined,
-      guessResults: []
+      score: finalScore,
+      gameStatus: 'finished',
+      userAnswer
     };
   }
 
   /**
-   * 计算回合得分
+   * 计算AI猜测的准确性
    */
-  static calculateRoundScore(
-    correctGuess: GuessResult | undefined,
-    timeSpent: number,
-    allResults: GuessResult[]
+  static calculateAIAccuracy(
+    results: GuessResult[], 
+    targetWord?: string, 
+    userAnswer?: string
   ): number {
-    if (!correctGuess) return 0;
-
-    let score = GAME_CONFIG.POINTS.CORRECT_GUESS;
-
-    // 时间奖励（越快完成得分越高）
-    const timeBonus = Math.max(0, GAME_CONFIG.ROUND_TIME_LIMIT - timeSpent);
-    score += Math.floor(timeBonus * GAME_CONFIG.POINTS.TIME_BONUS / GAME_CONFIG.ROUND_TIME_LIMIT);
-
-    // 置信度奖励
-    const confidenceBonus = Math.floor(correctGuess.confidence * GAME_CONFIG.POINTS.CONFIDENCE_BONUS);
-    score += confidenceBonus;
-
-    return score;
+    if (!targetWord && !userAnswer) return 0;
+    
+    const actualTarget = userAnswer || targetWord || '';
+    const topGuess = results[0];
+    
+    if (!topGuess) return 0;
+    
+    // 检查最高置信度的猜测是否正确
+    const isTopGuessCorrect = topGuess.guess.toLowerCase().includes(actualTarget.toLowerCase()) ||
+                             actualTarget.toLowerCase().includes(topGuess.guess.toLowerCase());
+    
+    if (isTopGuessCorrect) {
+      return Math.min(100, topGuess.confidence * 100);
+    }
+    
+    // 检查其他猜测中是否有正确的
+    const correctGuess = results.find(result => 
+      result.guess.toLowerCase().includes(actualTarget.toLowerCase()) ||
+      actualTarget.toLowerCase().includes(result.guess.toLowerCase())
+    );
+    
+    if (correctGuess) {
+      return Math.min(80, correctGuess.confidence * 100);
+    }
+    
+    return 0;
   }
 
   /**
-   * 创建游戏回合记录
+   * 计算最终得分
    */
-  static createGameRound(
-    roundNumber: number,
-    prompt: string,
-    drawing: CanvasData,
-    guesses: GuessResult[],
-    timeSpent: number
-  ): GameRound {
-    const correctGuess = guesses.find(g => g.isCorrect);
-    const score = this.calculateRoundScore(correctGuess, timeSpent, guesses);
+  static calculateFinalScore(
+    results: GuessResult[], 
+    timeSpent: number, 
+    aiAccuracy: number
+  ): number {
+    const baseScore = aiAccuracy;
+    const timeBonus = Math.max(0, (GAME_CONFIG.ROUND_TIME_LIMIT - timeSpent) / 10);
+    const confidenceBonus = results[0]?.confidence ? results[0].confidence * 20 : 0;
+    
+    return Math.round(baseScore + timeBonus + confidenceBonus);
+  }
 
-    return {
-      roundNumber,
-      prompt,
-      drawing,
-      guesses,
-      timeSpent,
-      score,
-      completed: true,
-      startTime: new Date(Date.now() - timeSpent * 1000),
-      endTime: new Date()
-    };
+  /**
+   * 重置游戏
+   */
+  static resetGame(): GameState {
+    return this.createInitialGameState();
   }
 
   /**
@@ -160,13 +146,25 @@ export class GameLogic {
    */
   static completeGameSession(
     session: GameSession,
-    finalState: GameState
+    finalState: GameState,
+    canvasData?: CanvasData
   ): GameSession {
+    const aiAccuracy = this.calculateAIAccuracy(
+      finalState.guessResults, 
+      finalState.targetWord, 
+      finalState.userAnswer
+    );
+
     return {
       ...session,
       endTime: new Date(),
-      totalScore: finalState.score,
-      status: 'finished'
+      drawing: canvasData,
+      targetWord: finalState.targetWord,
+      userAnswer: finalState.userAnswer,
+      aiGuesses: finalState.guessResults,
+      finalScore: finalState.score,
+      status: 'finished',
+      aiAccuracy
     };
   }
 
@@ -177,34 +175,26 @@ export class GameLogic {
     currentStats: PlayerStats,
     completedSession: GameSession
   ): PlayerStats {
-    const correctGuesses = completedSession.rounds.reduce(
-      (count, round) => count + (round.guesses.some(g => g.isCorrect) ? 1 : 0),
-      0
-    );
-    
-    const totalGuesses = completedSession.rounds.length;
-    const sessionAccuracy = totalGuesses > 0 ? (correctGuesses / totalGuesses) * 100 : 0;
-    
-    const totalPlayTime = completedSession.rounds.reduce(
-      (total, round) => total + round.timeSpent,
-      0
-    );
+    const sessionAccuracy = completedSession.aiAccuracy;
+    const playTime = completedSession.endTime && completedSession.startTime 
+      ? (completedSession.endTime.getTime() - completedSession.startTime.getTime()) / 1000
+      : 0;
 
     return {
       totalGames: currentStats.totalGames + 1,
-      totalScore: currentStats.totalScore + completedSession.totalScore,
+      totalScore: currentStats.totalScore + completedSession.finalScore,
       averageGuessAccuracy: this.calculateNewAverage(
         currentStats.averageGuessAccuracy,
         currentStats.totalGames,
         sessionAccuracy
       ),
-      favoriteCategories: [...currentStats.favoriteCategories], // TODO: 实现分类统计
+      favoriteCategories: [...currentStats.favoriteCategories],
       recentDrawings: [
-        ...completedSession.rounds.map(r => r.drawing).filter((d): d is CanvasData => d !== undefined),
+        ...(completedSession.drawing ? [completedSession.drawing] : []),
         ...currentStats.recentDrawings
-      ].slice(0, 10), // 保留最近10个绘画
-      bestScore: Math.max(currentStats.bestScore, completedSession.totalScore),
-      totalPlayTime: currentStats.totalPlayTime + totalPlayTime
+      ].slice(0, 10),
+      bestScore: Math.max(currentStats.bestScore, completedSession.finalScore),
+      totalPlayTime: currentStats.totalPlayTime + playTime
     };
   }
 
@@ -224,15 +214,7 @@ export class GameLogic {
    * 检查游戏是否结束
    */
   static isGameFinished(gameState: GameState): boolean {
-    return gameState.gameStatus === 'finished' || 
-           gameState.currentRound > gameState.totalRounds;
-  }
-
-  /**
-   * 获取游戏进度百分比
-   */
-  static getGameProgress(gameState: GameState): number {
-    return Math.min(100, (gameState.currentRound / gameState.totalRounds) * 100);
+    return gameState.gameStatus === 'finished';
   }
 
   /**
@@ -245,44 +227,27 @@ export class GameLogic {
   }
 
   /**
-   * 获取难度等级
-   */
-  static getDifficultyLevel(timeSpent: number): 'easy' | 'medium' | 'hard' {
-    if (timeSpent <= 15) return 'hard';
-    if (timeSpent <= 30) return 'medium';
-    return 'easy';
-  }
-
-  /**
    * 生成游戏总结
    */
   static generateGameSummary(session: GameSession): {
-    totalScore: number;
-    accuracy: number;
-    averageTime: number;
-    bestRound: GameRound | null;
-    difficulty: 'easy' | 'medium' | 'hard';
+    finalScore: number;
+    aiAccuracy: number;
+    targetWord?: string;
+    userAnswer?: string;
+    topGuess?: string;
+    playTime: number;
   } {
-    const rounds = session.rounds;
-    const correctRounds = rounds.filter(r => r.guesses.some(g => g.isCorrect));
-    const accuracy = rounds.length > 0 ? (correctRounds.length / rounds.length) * 100 : 0;
-    
-    const totalTime = rounds.reduce((sum, r) => sum + r.timeSpent, 0);
-    const averageTime = rounds.length > 0 ? totalTime / rounds.length : 0;
-    
-    const bestRound = rounds.reduce((best, current) => 
-      !best || current.score > best.score ? current : best, 
-      null as GameRound | null
-    );
-
-    const difficulty = this.getDifficultyLevel(averageTime);
+    const playTime = session.endTime && session.startTime 
+      ? (session.endTime.getTime() - session.startTime.getTime()) / 1000
+      : 0;
 
     return {
-      totalScore: session.totalScore,
-      accuracy,
-      averageTime,
-      bestRound,
-      difficulty
+      finalScore: session.finalScore,
+      aiAccuracy: session.aiAccuracy,
+      targetWord: session.targetWord,
+      userAnswer: session.userAnswer,
+      topGuess: session.aiGuesses[0]?.guess,
+      playTime
     };
   }
 }

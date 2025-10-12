@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useCallback, forwardRef } from 'react';
-import { useCanvas } from '@/hooks/useCanvas';
+import React, { useEffect, useCallback, forwardRef, useRef } from 'react';
 import { useResponsive } from '@/hooks/useResponsive';
 import { CanvasUtils } from '@/services/canvasUtils';
 import { CANVAS_CONFIG } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { TouchOptimizedCanvas } from './TouchHandler';
+import type { CanvasState } from '@/types/canvas';
 
 interface CanvasProps {
   width?: number;
@@ -14,6 +14,18 @@ interface CanvasProps {
   className?: string;
   onDrawingChange?: (hasDrawing: boolean) => void;
   disabled?: boolean;
+  // 新增：接收外部的canvas状态和操作
+  canvasState?: CanvasState;
+  canvasActions?: {
+    startDrawing: (point: { x: number; y: number }) => void;
+    continueDrawing: (point: { x: number; y: number }) => void;
+    finishDrawing: () => void;
+    initCanvas: (width: number, height: number) => void;
+    redraw: () => void;
+  };
+  canvasUtils?: {
+    isEmpty: () => boolean;
+  };
 }
 
 const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(function Canvas({
@@ -21,10 +33,16 @@ const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(function Canvas({
   height,
   className,
   onDrawingChange,
-  disabled = false
-}: CanvasProps) {
+  disabled = false,
+  canvasState,
+  canvasActions,
+  canvasUtils
+}, ref) {
   const { isMobile, isTablet } = useResponsive();
-  const { canvasRef, actions, utils } = useCanvas();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // 合并外部ref和内部ref
+  React.useImperativeHandle(ref, () => canvasRef.current!, [canvasRef]);
 
   // 计算画布尺寸
   const canvasWidth = width || (isMobile ? 300 : isTablet ? 400 : CANVAS_CONFIG.DEFAULT_WIDTH);
@@ -32,75 +50,162 @@ const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(function Canvas({
 
   // 初始化画布
   useEffect(() => {
-    actions.initCanvas(canvasWidth, canvasHeight);
-  }, [canvasWidth, canvasHeight, actions]);
+    if (canvasActions && canvasRef.current) {
+      // 直接初始化本地canvas
+      const canvas = canvasRef.current;
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.imageSmoothingEnabled = true;
+        
+        // 重绘现有笔画
+        if (canvasState && canvasState.strokes.length > 0) {
+          canvasState.strokes.forEach(stroke => {
+            if (stroke.points && stroke.points.length > 1) {
+              ctx.save();
+              ctx.strokeStyle = stroke.color;
+              ctx.lineWidth = stroke.width;
+              ctx.beginPath();
+              ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+              for (let i = 1; i < stroke.points.length; i++) {
+                ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+              }
+              ctx.stroke();
+              ctx.restore();
+            }
+          });
+        }
+      }
+    }
+  }, [canvasWidth, canvasHeight, canvasActions, canvasState]);
 
   // 监听绘画变化
   useEffect(() => {
-    if (onDrawingChange) {
-      onDrawingChange(!utils.isEmpty());
+    if (onDrawingChange && canvasUtils) {
+      onDrawingChange(!canvasUtils.isEmpty());
     }
-  }, [utils, onDrawingChange]);
+  }, [canvasUtils, onDrawingChange]);
 
   // 鼠标事件处理
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (disabled) return;
+    if (disabled || !canvasState || !canvasActions) return;
     
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const point = CanvasUtils.getCanvasPoint(e.nativeEvent, canvas);
-    actions.startDrawing(point);
-  }, [disabled, canvasRef, actions]);
+    
+    // 直接在这里处理绘制开始
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = canvasState.brushSettings.size;
+    ctx.strokeStyle = canvasState.brushSettings.color;
+    ctx.globalAlpha = canvasState.brushSettings.opacity;
+    
+    console.log('开始绘制，使用颜色:', canvasState.brushSettings.color);
+    
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    
+    // 调用外部的action来更新状态
+    canvasActions.startDrawing(point);
+  }, [disabled, canvasRef, canvasActions, canvasState]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (disabled) return;
+    if (disabled || !canvasState || !canvasActions) return;
+    
+    // 检查是否正在绘制
+    if (!canvasState.isDrawing) return;
     
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const point = CanvasUtils.getCanvasPoint(e.nativeEvent, canvas);
-    actions.continueDrawing(point);
-  }, [disabled, canvasRef, actions]);
+    
+    // 直接绘制到画布
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    
+    // 调用外部的action来更新状态
+    canvasActions.continueDrawing(point);
+  }, [disabled, canvasRef, canvasActions, canvasState]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (disabled) return;
     
     e.preventDefault();
-    actions.finishDrawing();
-  }, [disabled, actions]);
+    if (canvasActions) {
+      canvasActions.finishDrawing();
+    }
+  }, [disabled, canvasActions]);
 
   // 触摸事件处理
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (disabled) return;
+    if (disabled || !canvasState || !canvasActions) return;
     
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const point = CanvasUtils.getCanvasPoint(e.nativeEvent, canvas);
-    actions.startDrawing(point);
-  }, [disabled, canvasRef, actions]);
+    
+    // 直接在这里处理绘制开始
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = canvasState.brushSettings.size;
+    ctx.strokeStyle = canvasState.brushSettings.color;
+    ctx.globalAlpha = canvasState.brushSettings.opacity;
+    
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    
+    canvasActions.startDrawing(point);
+  }, [disabled, canvasRef, canvasActions, canvasState]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (disabled) return;
+    if (disabled || !canvasState || !canvasActions) return;
     
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const point = CanvasUtils.getCanvasPoint(e.nativeEvent, canvas);
-    actions.continueDrawing(point);
-  }, [disabled, canvasRef, actions]);
+    
+    // 直接绘制到画布
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    
+    canvasActions.continueDrawing(point);
+  }, [disabled, canvasRef, canvasActions, canvasState]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (disabled) return;
     
     e.preventDefault();
-    actions.finishDrawing();
-  }, [disabled, actions]);
+    if (canvasActions) {
+      canvasActions.finishDrawing();
+    }
+  }, [disabled, canvasActions]);
 
   // 防止上下文菜单
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -110,9 +215,9 @@ const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(function Canvas({
   return (
     <TouchOptimizedCanvas
       canvasRef={canvasRef}
-      onDrawStart={actions.startDrawing}
-      onDrawMove={actions.continueDrawing}
-      onDrawEnd={actions.finishDrawing}
+      onDrawStart={canvasActions?.startDrawing || (() => {})}
+      onDrawMove={canvasActions?.continueDrawing || (() => {})}
+      onDrawEnd={canvasActions?.finishDrawing || (() => {})}
       disabled={disabled}
     >
       <div className={cn('relative inline-block', className)}>
@@ -152,6 +257,3 @@ const Canvas = forwardRef<HTMLCanvasElement, CanvasProps>(function Canvas({
 });
 
 export default Canvas;
-
-// 导出画布操作钩子供父组件使用
-export { useCanvas };

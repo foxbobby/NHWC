@@ -33,9 +33,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5, // 允许iPad用户放大
+  userScalable: true, // 允许缩放以便更好的绘画体验
   themeColor: '#2563EB',
+  viewportFit: 'cover', // 支持全屏显示
 };
 
 export default function RootLayout({
