@@ -1,103 +1,65 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+import { useMultiScreen } from '@/components/Layout/MultiScreenLayout';
+import EnhancedHomePage from '@/components/Home/EnhancedHomePage';
+import IPadOptimizedGamePage from '@/components/Game/IPadOptimizedGamePage';
+import GamePage from '@/components/Game/GamePage';
+import type { Viewport } from 'next';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [gameStarted, setGameStarted] = useState(false);
+  const screenInfo = useMultiScreen();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+  const handleStartGame = () => {
+    setGameStarted(true);
+  };
+
+  const handleBackToHome = () => {
+    setGameStarted(false);
+  };
+
+  if (!gameStarted) {
+    return <EnhancedHomePage onStartGame={handleStartGame} />;
+  }
+
+  // 根据设备类型选择最适合的游戏页面
+  if (screenInfo.isIPad) {
+    return <IPadOptimizedGamePage />;
+  }
+
+  return <GamePage />;
 }
+
+export const metadata = {
+  title: 'FoxAI 你画我猜 - AI 智能绘画识别游戏',
+  description: '在线绘画游戏，让 AI 猜测你的画作。支持桌面端和移动端，流畅的绘图体验，智能的 AI 识别。',
+  keywords: '绘画游戏, AI识别, 你画我猜, FoxAI, 在线游戏',
+  authors: [{ name: 'FoxAI Team' }],
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    title: 'FoxAI 你画我猜',
+    description: '在线绘画游戏，让 AI 猜测你的画作',
+    type: 'website',
+    locale: 'zh_CN',
+    siteName: 'FoxAI 你画我猜',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FoxAI 你画我猜',
+    description: '在线绘画游戏，让 AI 猜测你的画作',
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5, // 允许iPad用户放大
+  userScalable: true, // 允许缩放以便更好的绘画体验
+  themeColor: '#2563EB',
+  viewportFit: 'cover', // 支持全屏显示
+};
